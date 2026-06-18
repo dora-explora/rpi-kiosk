@@ -6,6 +6,7 @@ use std::{
     time::Duration
 };
 
+use embedded_graphics::{draw_target::DrawTarget, geometry::Dimensions, pixelcolor::Rgb888, prelude::*, primitives::{Primitive, PrimitiveStyle, Rectangle}};
 use linuxfb::{Framebuffer, set_terminal_mode, TerminalMode};
 
 mod display;
@@ -15,9 +16,10 @@ const WIDTH: usize = 320;
 const HEIGHT: usize = 240;
 
 fn main() -> io::Result<()> {
-    let fb = Framebuffer::new("/dev/fb1").expect("could not open /dev/fb1 as framebuffer");
-    let mut mmap = fb.map().expect("could not open framebuffer memmap");
-    let mut screen: [[(u8, u8, u8); WIDTH]; HEIGHT];
+    let fbdev = Framebuffer::new("/dev/fb1").expect("could not open /dev/fb1 as framebuffer");
+    let mmap = fbdev.map().expect("could not open framebuffer memmap");
+    let mut tft = display::TFT::new(mmap);
+
     match File::open("/dev/tty1") {
         Ok(tty) => _ = set_terminal_mode(&tty, TerminalMode::Graphics),
         Err(_) => {},
@@ -36,19 +38,10 @@ fn main() -> io::Result<()> {
             Ok(g) => {input.t = g.t; input.x = g.x; input.y = g.y; input.p = g.p}
         }
 
-        screen = [[(0, 0, 0); WIDTH]; HEIGHT];
-        let r = 50 - (input.p / 4).min(50);
-        for i in (input.x - r.min(input.x))..(input.x + r) {
-            for j in (input.y - r.min(input.y))..(input.y + r) {
-                if input.t {
-                    screen[j.clamp(0, HEIGHT - 1)][i.clamp(0, WIDTH - 1)] = (0xFF, 0xFF, 0xFF);
-                } else {
-                    screen[j.clamp(0, HEIGHT - 1)][i.clamp(0, WIDTH - 1)] = (0xFF, 0x00, 0xFF);
-                }
-            }
-        }
-        display::flush(&screen, &mut mmap);
+        tft.fb.clear(Rgb888::new(22, 15, 28));
+        tft.fb.bounding_box().into_styled(PrimitiveStyle::with_stroke(Rgb888::WHITE, 4)).draw(&mut tft.fb).unwrap();
 
+        tft.flush();
         sleep(Duration::from_millis(10));
     }
     // return Ok(());
