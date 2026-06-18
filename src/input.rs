@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex, TryLockError::{Poisoned, WouldBlock}};
+use std::sync::{Arc, Mutex};
 use evdev::{Device, EventType};
 
 #[derive(Clone, Copy, Debug)]
@@ -36,8 +36,7 @@ pub fn input(inputam: Arc<Mutex<Input>>) {
 
         if dirty {
             match inputam.try_lock() {
-                Err(Poisoned(_)) => {}, // println!("poisoned error {e} from input thread"),
-                Err(WouldBlock) => {}, // println!("would block error from input thread"),
+                Err(_) => {},
                 Ok(mut g) => {g.t = input.t; g.x = input.x; g.y = input.y; g.p = input.p}
             }
         }
