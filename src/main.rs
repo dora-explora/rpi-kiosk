@@ -1,57 +1,48 @@
-use std::{thread::sleep, time::Duration, fs::File, io};
-use evdev::Device;
+use std::{
+    io,
+    sync::{Arc, Mutex, TryLockError::{Poisoned, WouldBlock}},
+    thread::{sleep, spawn},
+    time::Duration
+};
+
 use linuxfb::Framebuffer;
-use memmap::MmapMut;
-use nix::sys::epoll;
 
-fn write(mmap: &mut MmapMut, x: usize, y: usize, rgb: (u8, u8, u8)) {
-    let i: usize = (x + y * 320) * 4;
-    mmap[i] = rgb.2;
-    mmap[i + 1] = rgb.1;
-    mmap[i + 2] = rgb.0;
-}
-
-fn clear(mmap: &mut MmapMut, rgb: (u8, u8, u8)) {
-    for i in 0..mmap.len() {
-        match i % 4 {
-            0 => mmap[i] = rgb.2,
-            1 => mmap[i] = rgb.1,
-            2 => mmap[i] = rgb.0,
-            _ => {}
-        }
-    }
-}
+mod display;
+mod input;
 
 fn main() -> io::Result<()> {
     let fb = Framebuffer::new("/dev/fb1").expect("could not open /dev/fb1 as framebuffer");
     let mut screen = fb.map().expect("could not open framebuffer memmap");
 
-    let mut touch = Device::open("/dev/input/touchscreen")?;
-    // thank you so much evdev docs
-    touch.set_nonblocking(true)?;
-    let epoll = epoll::Epoll::new(epoll::EpollCreateFlags::EPOLL_CLOEXEC)?;
-    let event = epoll::EpollEvent::new(epoll::EpollFlags::EPOLLIN, 0);
-    epoll.add(&touch, event)?;
-    let mut events = [epoll::EpollEvent::empty(); 2];
+    let mut input = input::Input {t: false, x: 0, y: 0, p: 0};
+    let inputam = Arc::new(Mutex::new(input.clone()));
+
+    let inputamclone = inputam.clone();
+    spawn(move || input::input(inputamclone));
 
     loop {
-        match touch.fetch_events() {
-            Ok(iterator) => {
-                for ev in iterator {
-                    println!("{ev:?}");
+        match inputam.try_lock() {
+            Err(Poisoned(e)) => println!("poisoned error {e} from input thread"),
+            Err(WouldBlock) => println!("would block error from input thread"),
+            Ok(g) => {input.t = g.t; input.x = g.x; input.y = g.y; input.p = g.p}
+        }
 
+        if input.t {
+            for i in 0..input.x {
+                for j in 0..240 {
+                    display::write(&mut screen, i as usize, j as usize, (0x00, 0x00, 0x00));
                 }
             }
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                // Wait forever for bytes available on dev
-                epoll.wait(&mut events, epoll::EpollTimeout::NONE)?;
-            }
-            Err(e) => {
-                eprintln!("{e}");
-                break;
+            for i in input.x..320 {
+                for j in 0..240 {
+                    display::write(&mut screen, i as usize, j as usize, (0xFF, 0xFF, 0xFF));
+                }
             }
         }
-        println!("---------------------------------------------------")
+
+        println!("{:?}", input);
+
+        sleep(Duration::from_millis(50));
     }
-    return Ok(());
+    // return Ok(());
 }
