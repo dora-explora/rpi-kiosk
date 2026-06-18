@@ -1,19 +1,13 @@
 use memmap::MmapMut;
 
-pub fn write(mmap: &mut MmapMut, x: usize, y: usize, rgb: (u8, u8, u8)) {
-    let i: usize = (x + y * 320) * 4;
-    mmap[i] = rgb.2;
-    mmap[i + 1] = rgb.1;
-    mmap[i + 2] = rgb.0;
-}
+use crate::{HEIGHT, WIDTH};
 
-pub fn clear(mmap: &mut MmapMut, rgb: (u8, u8, u8)) {
-    for i in 0..mmap.len() {
-        match i % 4 {
-            0 => mmap[i] = rgb.2,
-            1 => mmap[i] = rgb.1,
-            2 => mmap[i] = rgb.0,
-            _ => {}
+pub fn flush(screen: &[[(u8, u8, u8); WIDTH]; HEIGHT], mmap: &mut MmapMut) {
+    for i in 0..WIDTH {
+        for j in 0..HEIGHT {
+            mmap[j * 1280 + i * 4 + 0] = screen[j][i].2;
+            mmap[j * 1280 + i * 4 + 1] = screen[j][i].1;
+            mmap[j * 1280 + i * 4 + 2] = screen[j][i].0;
         }
     }
 }

@@ -27,8 +27,8 @@ pub fn input(inputam: Arc<Mutex<Input>>) {
             input.t = true;
             dirty = true;
             match ev.code() {
-                0 => input.y = ((ev.value() as usize).clamp(400, 3760) - 400) / 14,
-                1 => input.x = ((ev.value() as usize).clamp(400, 3600) - 400) / 10,
+                0 => input.y = (3760 - (ev.value() as usize).clamp(400, 3760)) / 14, // make sure to manually edit this if HEIGHT is changed
+                1 => input.x = ((ev.value() as usize).clamp(400, 3600) - 400) / 10, // same for WIDTH
                 24 => { let p = ev.value() as usize; if p == 0 { input.t = false } else { input.p = p }},
                 _ => dirty = false
             }
@@ -36,8 +36,8 @@ pub fn input(inputam: Arc<Mutex<Input>>) {
 
         if dirty {
             match inputam.try_lock() {
-                Err(Poisoned(e)) => println!("poisoned error {e} from input thread"),
-                Err(WouldBlock) => println!("would block error from input thread"),
+                Err(Poisoned(_)) => {}, // println!("poisoned error {e} from input thread"),
+                Err(WouldBlock) => {}, // println!("would block error from input thread"),
                 Ok(mut g) => {g.t = input.t; g.x = input.x; g.y = input.y; g.p = input.p}
             }
         }
